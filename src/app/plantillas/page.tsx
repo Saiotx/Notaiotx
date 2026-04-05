@@ -3,19 +3,23 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { LayoutTemplate, Plus, FileText, Briefcase, Coffee, CheckSquare, Trash2 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { subscribeToDocument, setDocument } from '@/lib/firebase/firestore';
 
 export default function PlantillasPage() {
+    const { user } = useAuth();
+    const router = useRouter();
+    
     const defaultTemplates = [
-        { id: 1, name: 'Reunión de Equipo', type: 'Trabajo', color: 'bg-emerald-500', icon: Briefcase, desc: 'Estructura para actas de reunión y decisiones.' },
-        { id: 2, name: 'Planificador Semanal', type: 'Productividad', color: 'bg-blue-500', icon: CheckSquare, desc: 'Prioridades, metas y bloqueo de tiempo.' },
-        { id: 3, name: 'Diario de Reflexión', type: 'Personal', color: 'bg-orange-400', icon: Coffee, desc: 'Espacio para capturar pensamientos al final del día.' },
-        { id: 4, name: 'Nota Vacía', type: 'General', color: 'bg-gray-400', icon: FileText, desc: 'Comprueba esta estructura vacía para inspiración libre.' }
+        { id: 1, name: 'Reunión de Equipo', type: 'Trabajo', color: 'bg-emerald-500', iconName: 'Briefcase', desc: 'Estructura para actas de reunión y decisiones.' },
+        { id: 2, name: 'Planificador Semanal', type: 'Productividad', color: 'bg-blue-500', iconName: 'CheckSquare', desc: 'Prioridades, metas y bloqueo de tiempo.' },
+        { id: 3, name: 'Diario de Reflexión', type: 'Personal', color: 'bg-orange-400', iconName: 'Coffee', desc: 'Espacio para capturar pensamientos al final del día.' },
+        { id: 4, name: 'Nota Vacía', type: 'General', color: 'bg-gray-400', iconName: 'FileText', desc: 'Comprueba esta estructura vacía para inspiración libre.' }
     ];
 
     const [templates, setTemplates] = useState<any[]>([]);
     const [isAdding, setIsAdding] = useState(false);
     const [newTitle, setNewTitle] = useState('');
-    const router = useRouter();
 
     const useTemplate = (template: any) => {
         let content = '';
@@ -29,6 +33,7 @@ export default function PlantillasPage() {
             content = `<h2>${template.name}</h2><p>Empieza a escribir aquí...</p>`;
         }
 
+        // Dejarlo en localStorage temporalmente solo para el traspaso a otra página
         localStorage.setItem('app_active_template', JSON.stringify({
             title: template.name,
             content: content
@@ -37,24 +42,33 @@ export default function PlantillasPage() {
     };
 
     useEffect(() => {
-        const stored = localStorage.getItem('app_templates');
-        if (stored) {
-            setTemplates(JSON.parse(stored));
-        } else {
-            setTemplates(defaultTemplates.map(t => ({ ...t, iconName: t.icon.displayName || 'FileText' })));
-        }
-    }, [])
+        if (!user) return;
 
-    const getIcon = (iconName: string, id: number) => {
-        if (id <= 4) {
-            return defaultTemplates.find(t => t.id === id)?.icon || FileText;
+        const unsubscribe = subscribeToDocument(user.uid, 'plantillas/data', (data) => {
+            if (data && data.items) {
+                setTemplates(data.items);
+            } else {
+                setTemplates(defaultTemplates);
+                setDocument(user.uid, 'plantillas/data', { items: defaultTemplates });
+            }
+        });
+
+        return () => unsubscribe();
+    }, [user]);
+
+    const getIcon = (iconName: string) => {
+        switch (iconName) {
+            case 'Briefcase': return Briefcase;
+            case 'CheckSquare': return CheckSquare;
+            case 'Coffee': return Coffee;
+            case 'FileText': return FileText;
+            default: return LayoutTemplate;
         }
-        return LayoutTemplate;
     };
 
-    const handleCreateTemplate = (e: React.FormEvent) => {
+    const handleCreateTemplate = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newTitle.trim()) return;
+        if (!newTitle.trim() || !user) return;
 
         const newTemplate = {
             id: Date.now(),
@@ -67,34 +81,44 @@ export default function PlantillasPage() {
 
         const updated = [...templates, newTemplate];
         setTemplates(updated);
-        localStorage.setItem('app_templates', JSON.stringify(updated));
+        
+        try {
+            await setDocument(user.uid, 'plantillas/data', { items: updated });
+        } catch (error) {
+            console.error("Error saving template", error);
+        }
 
         setNewTitle('');
         setIsAdding(false);
     };
 
-    const deleteTemplate = (e: React.MouseEvent, id: number) => {
+    const deleteTemplate = async (e: React.MouseEvent, id: number) => {
         e.stopPropagation();
-        if (id <= 4) return; // Don't delete defaults
+        if (id <= 4 || !user) return; // Don't delete defaults
         const updated = templates.filter(t => t.id !== id);
         setTemplates(updated);
-        localStorage.setItem('app_templates', JSON.stringify(updated));
+        
+        try {
+            await setDocument(user.uid, 'plantillas/data', { items: updated });
+        } catch (error) {
+            console.error("Error deleting template", error);
+        }
     };
 
     return (
-        <div className="flex-1 w-full h-full bg-[#f8f9fa] flex flex-col pt-8">
-            <div className="px-12 mb-8 shrink-0 flex items-center justify-between">
+        <div className="flex-1 w-full h-full bg-[#f8f9fa] flex flex-col pt-6 sm:pt-8">
+            <div className="px-4 sm:px-8 lg:px-12 mb-6 sm:mb-8 shrink-0 flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-semibold text-gray-800 flex items-center gap-3">
-                        <LayoutTemplate className="w-8 h-8 text-[#00a82d]" />
+                    <h1 className="text-2xl sm:text-3xl font-semibold text-gray-800 flex items-center gap-2 sm:gap-3">
+                        <LayoutTemplate className="w-6 h-6 sm:w-8 sm:h-8 text-[#00a82d]" />
                         Plantillas
                     </h1>
-                    <p className="text-gray-500 mt-2 font-medium">Ahorra tiempo empezando con una estructura prediseñada.</p>
+                    <p className="text-sm sm:text-base text-gray-500 mt-1 sm:mt-2 font-medium">Ahorra tiempo empezando con una estructura prediseñada.</p>
                 </div>
             </div>
 
-            <div className="flex-1 px-12 overflow-y-auto pb-12">
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            <div className="flex-1 px-4 sm:px-8 lg:px-12 overflow-y-auto pb-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
 
                     {/* Create New Button */}
                     <div
@@ -128,7 +152,7 @@ export default function PlantillasPage() {
 
                     {/* Pre-made and Custom Templates */}
                     {templates.map(template => {
-                        const IconComponent = getIcon(template.iconName, template.id);
+                        const IconComponent = getIcon(template.iconName);
                         const isCustom = template.id > 4;
 
                         return (
@@ -137,14 +161,14 @@ export default function PlantillasPage() {
                                 {isCustom && (
                                     <button
                                         onClick={(e) => deleteTemplate(e, template.id)}
-                                        className="absolute top-3 right-3 p-1.5 bg-white/50 backdrop-blur-sm hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-md opacity-0 group-hover:opacity-100 transition-all z-20"
+                                        className="absolute top-3 right-3 p-1.5 bg-white/50 backdrop-blur-sm hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-md opacity-0 group-hover:opacity-100 transition-all z-20 md:touch-auto touch-manipulation"
                                     >
                                         <Trash2 className="w-4 h-4" />
                                     </button>
                                 )}
 
                                 <div className={`h-[100px] ${template.color} flex items-center justify-center relative overflow-hidden shrink-0`}>
-                                    <IconComponent className="w-10 h-10 text-white/90 relative z-10" />
+                                    {IconComponent && <IconComponent className="w-10 h-10 text-white/90 relative z-10" />}
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
                                 </div>
 
@@ -160,7 +184,7 @@ export default function PlantillasPage() {
                                     </p>
 
                                     <div className="mt-4 pt-4 border-t border-gray-50 flex justify-center">
-                                        <span className="text-xs font-bold text-[#00a82d] opacity-0 group-hover:opacity-100 transition-opacity">Usar plantilla →</span>
+                                        <span className="text-xs font-bold text-[#00a82d] md:opacity-0 md:group-hover:opacity-100 transition-opacity">Usar plantilla →</span>
                                     </div>
                                 </div>
                             </div>

@@ -16,13 +16,20 @@ import {
     Plus,
     AlignLeft,
     AlignCenter,
-    AlignRight
+    AlignRight,
+    ArrowLeft
 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { subscribeToDocument, setDocument } from '@/lib/firebase/firestore';
 
 export default function NotasPage() {
+    const { user } = useAuth();
     const [notes, setNotes] = useState<any[]>([
-        { id: '1', title: 'Nota sin título', snippet: 'Empieza a escribir...', date: 'Justo ahora', isActive: true, hasTask: false, tasksCompleted: 0, tasksTotal: 0 }
+        { id: '1', title: 'Nota sin título', content: '', snippet: 'Empieza a escribir...', date: 'Justo ahora', isActive: true, hasTask: false, tasksCompleted: 0, tasksTotal: 0 }
     ]);
+    const [activeNoteId, setActiveNoteId] = useState<string>('1');
+    const [isListVisibleOnMobile, setIsListVisibleOnMobile] = useState(false);
+    
     const titleRef = useRef<HTMLInputElement>(null);
     const editorRef = useRef<HTMLDivElement>(null);
     const colorInputRef = useRef<HTMLInputElement>(null);
@@ -35,27 +42,50 @@ export default function NotasPage() {
     const [isNotebookDropdownOpen, setIsNotebookDropdownOpen] = useState(false);
 
     useEffect(() => {
-        const stored = localStorage.getItem('app_notebooks');
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            setNotebooks(parsed);
-            if (parsed.length > 0) setSelectedNotebook(parsed[0]);
+        if (!user) return;
+        
+        // Cargar cuadernos
+        const unsubCuadernos = subscribeToDocument(user.uid, 'cuadernos/data', (data) => {
+            if (data && data.items) {
+                setNotebooks(data.items);
+                if (data.items.length > 0 && !selectedNotebook) setSelectedNotebook(data.items[0]);
+            }
+        });
+
+        // Cargar notas
+        const unsubNotas = subscribeToDocument(user.uid, 'notas/data', (data) => {
+            if (data && data.items && data.items.length > 0) {
+                // Solo inicializar si es la primera carga y no has editado nada localmente recién
+                setNotes(data.items);
+                
+                // Actualizar la vista del editor si tenemos la nota activa y el DOM está listo
+                if (activeNoteId && titleRef.current && editorRef.current) {
+                    const actNote = data.items.find((n: any) => n.id === activeNoteId);
+                    if (actNote) {
+                       // Sólo actualizamos si es diferente (para no perder el foco)
+                       if (titleRef.current.value !== actNote.title) titleRef.current.value = actNote.title;
+                       if (editorRef.current.innerHTML !== actNote.content && actNote.content) editorRef.current.innerHTML = actNote.content;
+                    }
+                }
+            } else {
+                saveToFirebase([{ id: '1', title: 'Nota sin título', content: '', snippet: 'Empieza a escribir...', date: 'Hoy', isActive: true, hasTask: false }]);
+            }
+        });
+
+        return () => {
+            unsubCuadernos();
+            unsubNotas();
+        };
+    }, [user, activeNoteId]);
+
+    const saveToFirebase = async (updatedNotes: any[]) => {
+        if (!user) return;
+        try {
+            await setDocument(user.uid, 'notas/data', { items: updatedNotes });
+        } catch (error) {
+            console.error("Error saving notes:", error);
         }
-
-        // Handle incoming templates
-        const activeTemplateStr = localStorage.getItem('app_active_template');
-        if (activeTemplateStr) {
-            try {
-                const activeTemplate = JSON.parse(activeTemplateStr);
-                if (titleRef.current) titleRef.current.value = activeTemplate.title;
-                if (editorRef.current) editorRef.current.innerHTML = activeTemplate.content;
-
-                setNotes(prev => prev.map(n => n.id === '1' ? { ...n, title: activeTemplate.title, snippet: 'Plantilla aplicada...' } : n));
-
-                localStorage.removeItem('app_active_template');
-            } catch (e) { }
-        }
-    }, []);
+    };
 
     // Auto-save logic
     const [saveStatus, setSaveStatus] = useState<'Guardado' | 'Guardando...' | 'Sin guardar'>('Guardado');
@@ -66,18 +96,23 @@ export default function NotasPage() {
 
         if (editorRef.current && titleRef.current) {
             const currentTitle = titleRef.current.value.trim() || 'Nota sin título';
+            const currentContentHtml = editorRef.current.innerHTML || '';
             const currentText = editorRef.current.innerText || '';
             const cleanText = currentText.replace(/\n/g, ' ').trim();
             const snippet = cleanText.length > 50 ? cleanText.substring(0, 50) + '...' : (cleanText || 'Empieza a escribir...');
 
-            setNotes(prev => prev.map(n => n.id === '1' ? { ...n, title: currentTitle, snippet: snippet } : n));
+            setNotes(prev => {
+                const updated = prev.map(n => n.id === activeNoteId ? { ...n, title: currentTitle, snippet: snippet, content: currentContentHtml } : n);
+                saveToFirebase(updated);
+                return updated;
+            });
         }
 
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(() => {
             setSaveStatus('Guardado');
         }, 800);
-    }, []);
+    }, [activeNoteId, user]);
 
     const handleContentChange = () => {
         setSaveStatus('Sin guardar');
@@ -134,9 +169,9 @@ export default function NotasPage() {
     };
 
     return (
-        <div className="flex w-full h-full">
+        <div className="flex w-full h-full relative">
             {/* Middle Column: Note List */}
-            <div className="w-80 h-full border-r border-gray-200 bg-white flex flex-col shrink-0">
+            <div className={`${isListVisibleOnMobile ? 'flex' : 'hidden'} md:flex absolute md:relative inset-0 md:inset-auto z-10 w-full md:w-80 h-full border-r border-gray-200 bg-white flex-col shrink-0`}>
                 <div className="p-4 flex items-center justify-between border-b border-gray-100">
                     <h1 className="text-xl font-medium text-gray-800 flex items-center gap-2">
                         Notas
@@ -153,7 +188,11 @@ export default function NotasPage() {
                     {notes.map((note) => (
                         <div
                             key={note.id}
-                            className={`p-4 rounded-xl cursor-pointer transition-colors border ${note.isActive
+                            onClick={() => {
+                                setActiveNoteId(note.id);
+                                setIsListVisibleOnMobile(false);
+                            }}
+                            className={`p-4 rounded-xl cursor-pointer transition-colors border ${note.id === activeNoteId
                                 ? 'border-blue-400 bg-white shadow-sm ring-1 ring-blue-400'
                                 : 'border-transparent hover:bg-gray-50'
                                 }`}
@@ -180,13 +219,19 @@ export default function NotasPage() {
             </div>
 
             {/* Right Column: Note Editor */}
-            <div className="flex-1 flex flex-col bg-white h-full relative">
+            <div className={`${!isListVisibleOnMobile ? 'flex' : 'hidden'} md:flex flex-1 flex-col bg-white h-full relative`}>
                 {/* Editor Toolbar */}
-                <div className="h-14 border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <span className="hover:text-gray-800 cursor-pointer text-gray-400">«</span>
-                        <span className="hover:text-gray-800 cursor-pointer text-gray-400"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 15 6 6m-6-6v4.8m0-4.8h4.8M9 9 3 3m6 6V4.2M9 9H4.2" /></svg></span>
-                        <span className="w-px h-4 bg-gray-200 mx-2" />
+                <div className="h-14 border-b border-gray-200 flex items-center justify-between px-2 sm:px-6 shrink-0">
+                    <div className="flex items-center gap-1 sm:gap-2 text-sm text-gray-500">
+                        <button 
+                            className="md:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-full mr-1"
+                            onClick={() => setIsListVisibleOnMobile(true)}
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                        </button>
+                        <span className="hidden sm:inline hover:text-gray-800 cursor-pointer text-gray-400">«</span>
+                        <span className="hidden sm:inline hover:text-gray-800 cursor-pointer text-gray-400"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 15 6 6m-6-6v4.8m0-4.8h4.8M9 9 3 3m6 6V4.2M9 9H4.2" /></svg></span>
+                        <span className="hidden sm:inline w-px h-4 bg-gray-200 mx-2" />
                         <div className="relative">
                             <button
                                 onClick={() => setIsNotebookDropdownOpen(!isNotebookDropdownOpen)}
