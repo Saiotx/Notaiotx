@@ -221,10 +221,10 @@ export default function NotasPage() {
             {/* Right Column: Note Editor */}
             <div className={`${!isListVisibleOnMobile ? 'flex' : 'hidden'} md:flex flex-1 flex-col bg-white h-full relative`}>
                 {/* Editor Toolbar */}
-                <div className="h-14 border-b border-gray-200 flex items-center justify-between px-2 sm:px-6 shrink-0">
-                    <div className="flex items-center gap-1 sm:gap-2 text-sm text-gray-500">
+                <div className="h-14 border-b border-gray-200 flex items-center justify-between px-2 sm:px-6 shrink-0 gap-2 overflow-x-auto" style={{scrollbarWidth: 'none'}}>
+                    <div className="flex items-center gap-1 sm:gap-2 text-sm text-gray-500 shrink-0">
                         <button 
-                            className="md:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-full mr-1"
+                            className="md:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-full mr-1 shrink-0"
                             onClick={() => setIsListVisibleOnMobile(true)}
                         >
                             <ArrowLeft className="w-5 h-5" />
@@ -232,13 +232,13 @@ export default function NotasPage() {
                         <span className="hidden sm:inline hover:text-gray-800 cursor-pointer text-gray-400">«</span>
                         <span className="hidden sm:inline hover:text-gray-800 cursor-pointer text-gray-400"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 15 6 6m-6-6v4.8m0-4.8h4.8M9 9 3 3m6 6V4.2M9 9H4.2" /></svg></span>
                         <span className="hidden sm:inline w-px h-4 bg-gray-200 mx-2" />
-                        <div className="relative">
+                        <div className="relative shrink-0">
                             <button
                                 onClick={() => setIsNotebookDropdownOpen(!isNotebookDropdownOpen)}
-                                className="flex items-center gap-1 hover:text-gray-800 hover:bg-gray-100 px-2 py-1 rounded transition-colors cursor-pointer text-gray-500 font-medium"
+                                className="flex items-center gap-1 hover:text-gray-800 hover:bg-gray-100 px-2 py-1 rounded transition-colors cursor-pointer text-gray-500 font-medium whitespace-nowrap"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" /></svg>
-                                {selectedNotebook ? selectedNotebook.name : 'Seleccionar cuaderno'}
+                                <span className="max-w-[70px] sm:max-w-none truncate inline-block">{selectedNotebook ? selectedNotebook.name : 'Cuaderno'}</span>
                                 <span className="text-[10px] ml-1">▼</span>
                             </button>
 
@@ -261,29 +261,29 @@ export default function NotasPage() {
                                 </div>
                             )}
                         </div>
-                        <span>›</span>
-                        <span className="text-gray-800">Nota sin título</span>
+                        <span className="shrink-0">›</span>
+                        <span className="text-gray-800 whitespace-nowrap hidden sm:inline">Nota sin título</span>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <span className={`text-xs font-medium mr-2 transition-colors duration-300 ${saveStatus === 'Guardado' ? 'text-gray-400' : saveStatus === 'Guardando...' ? 'text-blue-500 animate-pulse' : 'text-orange-400'}`}>
+                    <div className="flex items-center gap-1 sm:gap-2 shrink-0 ml-auto">
+                        <span className={`text-xs font-medium hidden sm:block transition-colors duration-300 ${saveStatus === 'Guardado' ? 'text-gray-400' : saveStatus === 'Guardando...' ? 'text-blue-500 animate-pulse' : 'text-orange-400'}`}>
                             {saveStatus}
                         </span>
-                        <button onClick={triggerSave} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-1.5 rounded-full text-sm font-medium transition-colors shadow-sm">
+                        <button onClick={triggerSave} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors shadow-sm whitespace-nowrap">
                             Guardar
                         </button>
-                        <button className="bg-[#4a72ff] hover:bg-blue-700 text-white px-4 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
-                            Compartir
+                        <button className="bg-[#4a72ff] hover:bg-blue-700 text-white px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors flex items-center gap-1 shadow-sm whitespace-nowrap">
+                            <span className="hidden sm:inline">Compartir</span>
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
                         </button>
-                        <button className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-full">
+                        <button className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-full shrink-0">
                             <MoreHorizontal className="w-5 h-5" />
                         </button>
                     </div>
                 </div>
 
                 {/* Formatting Toolbar */}
-                <div className="h-12 border-b border-gray-100 flex items-center px-6 gap-3 text-gray-400 shrink-0 overflow-x-auto text-sm w-full">
+                <div className="h-12 border-b border-gray-100 flex items-center px-3 sm:px-6 gap-2 sm:gap-3 text-gray-400 shrink-0 overflow-x-auto text-sm w-full" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
                     <button
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => fileInputRef.current?.click()}

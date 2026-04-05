@@ -65,7 +65,6 @@ export default function CuadernosPage() {
             <div className="px-4 sm:px-8 xl:px-16 mb-4 sm:mb-6 shrink-0 flex items-center justify-between">
                 <h1 className="text-2xl sm:text-3xl font-semibold text-gray-800 flex items-baseline gap-3">
                     Cuadernos
-                    <span className="text-sm font-normal text-gray-400">{notebooks.length}</span>
                 </h1>
 
                 <button
