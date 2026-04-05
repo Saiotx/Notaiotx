@@ -2,9 +2,13 @@
 
 import { Pencil, CheckSquare, Maximize2, MoreHorizontal, FileText, Home, X, Plus, Trash2, Save } from 'lucide-react';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { subscribeToDocument, setDocument } from '@/lib/firebase/firestore';
 
 export default function InicioPage() {
+  const { user } = useAuth();
+  
   // Notas state
   const [notes, setNotes] = useState<any[]>([]);
   const [quickNoteText, setQuickNoteText] = useState("");
@@ -14,22 +18,46 @@ export default function InicioPage() {
   const [scratchpadColor, setScratchpadColor] = useState("bg-[#fef5cc]");
   const [isScratchpadExpanded, setIsScratchpadExpanded] = useState(false);
   const [postIts, setPostIts] = useState<any[]>([]);
+  
+  // Ref para evitar ciclos de guardado infinitos en scratchpad
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const savedText = localStorage.getItem("scratchpad-text");
-    if (savedText) setScratchpadText(savedText);
+    if (!user) return;
+    
+    const unsubscribe = subscribeToDocument(user.uid, 'dashboard/data', (data) => {
+      if (data) {
+        setNotes(data.quickNotes || []);
+        setPostIts(data.postIts || []);
+        // Solo actualizar texto si no hay un timeout (el usuario no está escribiendo localmente)
+        if (!typingTimeoutRef.current && data.scratchpadText !== undefined) {
+           setScratchpadText(data.scratchpadText);
+        }
+      }
+    });
 
-    const savedNotes = localStorage.getItem("quick-notes");
-    if (savedNotes) setNotes(JSON.parse(savedNotes));
+    return () => unsubscribe();
+  }, [user]);
 
-    const savedPostIts = localStorage.getItem("post-its");
-    if (savedPostIts) setPostIts(JSON.parse(savedPostIts));
-  }, []);
+  const saveToFirebase = async (updates: any) => {
+    if (!user) return;
+    try {
+      await setDocument(user.uid, 'dashboard/data', updates);
+    } catch (error) {
+      console.error("Error saving data:", error);
+    }
+  };
 
   const handleScratchpadChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
     setScratchpadText(text);
-    localStorage.setItem("scratchpad-text", text);
+    
+    // Auto-save debounced
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      saveToFirebase({ scratchpadText: text });
+      typingTimeoutRef.current = null;
+    }, 1000);
   };
 
   const saveQuickNote = () => {
@@ -42,7 +70,7 @@ export default function InicioPage() {
     };
     const updatedNotes = [newNote, ...notes];
     setNotes(updatedNotes);
-    localStorage.setItem("quick-notes", JSON.stringify(updatedNotes));
+    saveToFirebase({ quickNotes: updatedNotes });
     setQuickNoteText("");
   };
 
@@ -50,7 +78,7 @@ export default function InicioPage() {
     e.preventDefault();
     const updatedNotes = notes.filter((n) => n.id !== id);
     setNotes(updatedNotes);
-    localStorage.setItem("quick-notes", JSON.stringify(updatedNotes));
+    saveToFirebase({ quickNotes: updatedNotes });
   };
 
   const savePostIt = () => {
@@ -63,16 +91,20 @@ export default function InicioPage() {
     };
     const updatedPostIts = [newPostIt, ...postIts];
     setPostIts(updatedPostIts);
-    localStorage.setItem("post-its", JSON.stringify(updatedPostIts));
     setScratchpadText("");
-    localStorage.setItem("scratchpad-text", "");
+    
+    saveToFirebase({ 
+      postIts: updatedPostIts,
+      scratchpadText: ""
+    });
+    
     setIsScratchpadExpanded(false);
   };
 
   const deletePostIt = (id: string) => {
     const updatedPostIts = postIts.filter((p) => p.id !== id);
     setPostIts(updatedPostIts);
-    localStorage.setItem("post-its", JSON.stringify(updatedPostIts));
+    saveToFirebase({ postIts: updatedPostIts });
   };
 
   return (
