@@ -108,7 +108,7 @@ export default function InicioPage() {
   };
 
   return (
-    <div className="flex-1 w-full h-full bg-[#f8f9fa] overflow-y-auto px-16 py-8">
+    <div className="flex-1 w-full h-full bg-[#f8f9fa] overflow-y-auto px-4 sm:px-8 xl:px-16 py-6 sm:py-8">
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
